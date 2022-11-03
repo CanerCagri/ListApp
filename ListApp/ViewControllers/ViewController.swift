@@ -6,13 +6,15 @@
 //
 
 import UIKit
+import CoreData
 
 class ViewController: UIViewController {
     
     @IBOutlet weak var tableView: UITableView!
     
-    var data = [String]()
+    var data = [NSManagedObject]()
 
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         configureViewController()
@@ -22,9 +24,10 @@ class ViewController: UIViewController {
         title = "ListApp"
         tableView.delegate = self
         tableView.dataSource = self
+        
+        fetchData()
     }
 
-    
     @IBAction func leftBarButtonTapped(_ sender: UIBarButtonItem) {
         let alertController = UIAlertController(title: "Deleting All Items", message: nil, preferredStyle: .alert)
         
@@ -47,8 +50,18 @@ class ViewController: UIViewController {
                                           style: .default) { _ in
             let textFieldText = alertController.textFields?.first?.text
             if textFieldText != "" {
-                self.data.append((textFieldText)!)
-                self.tableView.reloadData()
+                
+                let appDelegate = UIApplication.shared.delegate as? AppDelegate
+                
+                let managedObjectContext = appDelegate?.persistentContainer.viewContext
+                
+                let entity = NSEntityDescription.entity(forEntityName: "ListItem", in: managedObjectContext!)
+                
+                let listItem = NSManagedObject(entity: entity!, insertInto: managedObjectContext!)
+                listItem.setValue(textFieldText, forKey: "title")
+                try? managedObjectContext?.save()
+
+                self.fetchData()
             }
         }
         
@@ -58,19 +71,30 @@ class ViewController: UIViewController {
         alertController.addAction(defaultButton)
         alertController.addAction(cancelButton)
         present(alertController, animated: true)
-      
     }
-
+    
+    func fetchData() {
+        let appDelegate = UIApplication.shared.delegate as? AppDelegate
+        
+        let managedObjectContext = appDelegate?.persistentContainer.viewContext
+        
+        let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: "ListItem")
+        data = try! managedObjectContext!.fetch(fetchRequest)
+        
+        tableView.reloadData()
+    }
 }
 
 extension ViewController: UITableViewDelegate, UITableViewDataSource {
+    
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return data.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        cell.textLabel?.text = data[indexPath.row]
+        let listItem = data[indexPath.row]
+        cell.textLabel?.text = listItem.value(forKey: "title") as? String
         return cell
     }
     
@@ -78,8 +102,14 @@ extension ViewController: UITableViewDelegate, UITableViewDataSource {
         
         let deleteAction = UIContextualAction(style: .normal,
                                               title: "Delete") { _, _, _ in
-            self.data.remove(at: indexPath.row)
-            self.tableView.reloadData()
+            
+            let appDelegate = UIApplication.shared.delegate as? AppDelegate
+            
+            let managedObjectContext = appDelegate?.persistentContainer.viewContext
+            managedObjectContext?.delete(self.data[indexPath.row])
+            try? managedObjectContext?.save()
+            
+            self.fetchData()
         }
         
         deleteAction.backgroundColor = .systemRed
@@ -87,6 +117,4 @@ extension ViewController: UITableViewDelegate, UITableViewDataSource {
         let config = UISwipeActionsConfiguration(actions: [deleteAction])
         return config
     }
-
 }
-
